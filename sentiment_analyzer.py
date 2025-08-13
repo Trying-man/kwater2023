@@ -1,54 +1,108 @@
+import logging
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import numpy as np
-import logging
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class SentimentAnalyzer:
-    def __init__(self):
-        # 한국어 감정분석에 특화된 모델 사용
-        self.model_name = "klue/bert-base"
-        logger.info(f"Loading model: {self.model_name}")
-        
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(self.model_name, num_labels=3)
-        self.labels = ["Negative", "Neutral", "Positive"]
-        
-        # 임계값 설정 - 더 엄격하게 설정
-        self.threshold = 0.6  # 감정 점수가 이 값보다 높아야 해당 감정으로 분류
+    def __init__(self, model_name="snunlp/KR-FinBert-SC"):
+        self.model_name = model_name
+        logger.info(f"Loading Korean sentiment analysis model: {self.model_name}")
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            self.model = AutoModelForSequenceClassification.from_pretrained(
+                self.model_name,
+                num_labels=3
+            )
+            
+            # 모델별 라벨과 임계값 설정
+            if "KR-FinBert-SC" in model_name:
+                self.labels = ["negative", "neutral", "positive"]
+                self.threshold = 0.1  # 금융 감정분석 모델용 낮은 임계값
+            elif "KcELECTRA" in model_name:
+                self.labels = ["Negative", "Neutral", "Positive"]
+                self.threshold = 0.4
+            else:
+                self.labels = ["Negative", "Neutral", "Positive"]
+                self.threshold = 0.6
+                
+            logger.info(f"Model loaded successfully! Threshold: {self.threshold}")
+        except Exception as e:
+            logger.error(f"Failed to load model {model_name}: {e}")
+            logger.info("Falling back to klue/bert-base")
+            self.model_name = "klue/bert-base"
+            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+            self.model = AutoModelForSequenceClassification.from_pretrained(
+                self.model_name,
+                num_labels=3
+            )
+            self.labels = ["Negative", "Neutral", "Positive"]
+            self.threshold = 0.6
 
     def analyze(self, text: str) -> str:
-        # 입력 텍스트 로깅
-        logger.info(f"Analyzing text: {text[:100]}...")  # 처음 100자만 로깅
-        
-        # 토크나이징 및 모델 입력 준비
-        inputs = self.tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
-        
-        # 예측 수행
+        text = self._preprocess_text(text)
+        logger.info(f"Analyzing text: {text[:100]}...")
+        inputs = self.tokenizer(
+            text,
+            return_tensors="pt",
+            truncation=True,
+            max_length=512,
+            padding=True
+        )
         with torch.no_grad():
             outputs = self.model(**inputs)
             predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
             scores = predictions[0].numpy()
-            
-            # 점수 로깅
             logger.info(f"Sentiment scores: {dict(zip(self.labels, scores))}")
-            
-            # 가장 높은 점수와 두 번째로 높은 점수의 차이가 임계값보다 작으면 중립으로 분류
-            sorted_scores = np.sort(scores)[::-1]
-            if sorted_scores[0] - sorted_scores[1] < self.threshold:
-                result = "Neutral"
-            else:
-                result = self.labels[np.argmax(scores)]
-            
+            result = self._classify_sentiment(scores)
             logger.info(f"Final sentiment: {result}")
             return result
 
-    def analyze_batch(self, texts: list) -> list:
-        results = []
-        for text in texts:
-            result = self.analyze(text)
-            results.append(result)
-        return results 
+    def _preprocess_text(self, text: str) -> str:
+        text = " ".join(text.split())
+        text = text.replace("&amp;", "&")
+        text = text.replace("&lt;", "<")
+        text = text.replace("&gt;", ">")
+        return text
+
+    def _classify_sentiment(self, scores: np.ndarray) -> str:
+        sorted_indices = np.argsort(scores)[::-1]
+        max_score = scores[sorted_indices[0]]
+        second_score = scores[sorted_indices[1]]
+        score_diff = max_score - second_score
+        if score_diff < self.threshold:
+            return "neutral" if "neutral" in self.labels else "Neutral"
+        else:
+            return self.labels[sorted_indices[0]]
+
+    def get_model_info(self) -> dict:
+        return {
+            "model_name": self.model_name,
+            "labels": self.labels,
+            "threshold": self.threshold
+        }
+
+# 사용 가능한 한국어 감정분석 모델들
+KOREAN_SENTIMENT_MODELS = {
+    "kr_finbert": {
+        "name": "snunlp/KR-FinBert-SC",
+        "description": "한국어 금융 감정분석 모델 (감정분석 특화)",
+        "labels": ["negative", "neutral", "positive"],
+        "threshold": 0.1
+    },
+    "kc_electra": {
+        "name": "beomi/KcELECTRA-base-v2022",
+        "description": "한국어 ELECTRA 모델",
+        "labels": ["Negative", "Neutral", "Positive"],
+        "threshold": 0.4
+    },
+    "klue_roberta": {
+        "name": "klue/roberta-base",
+        "description": "KLUE RoBERTa 모델",
+        "labels": ["Negative", "Neutral", "Positive"],
+        "threshold": 0.6
+    }
+} 

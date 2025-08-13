@@ -26,14 +26,21 @@ sentiment_available = False
 
 try:
     print("감정분석 모델을 로딩 중입니다...")
-    sentiment_analyzer = SentimentAnalyzer()
+    sentiment_analyzer = SentimentAnalyzer("snunlp/KR-FinBert-SC")
     sentiment_available = True
     print("감정분석 모델 로딩 완료!")
 except Exception as e:
     print(f"감정분석 모델 로딩 실패: {e}")
-    print("감정분석 기능 없이 서버를 시작합니다.")
-    sentiment_analyzer = None
-    sentiment_available = False
+    print("폴백 모델로 시도합니다...")
+    try:
+        sentiment_analyzer = SentimentAnalyzer("klue/bert-base")
+        sentiment_available = True
+        print("폴백 모델 로딩 완료!")
+    except Exception as e2:
+        print(f"폴백 모델도 실패: {e2}")
+        print("감정분석 기능 없이 서버를 시작합니다.")
+        sentiment_analyzer = None
+        sentiment_available = False
 
 @app.get("/")
 async def root():
@@ -220,7 +227,7 @@ async def get_sentiment_status():
     """
     return {
         "available": sentiment_available,
-        "model_name": "klue/bert-base" if sentiment_available else None
+        "model_name": sentiment_analyzer.model_name if sentiment_available else None
     }
 
 if __name__ == "__main__":
