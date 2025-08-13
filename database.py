@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # PostgreSQL connection string
-DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/news_sentiment"
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/news_sentiment")
 
 # Create SQLAlchemy engine
 engine = create_engine(DATABASE_URL)

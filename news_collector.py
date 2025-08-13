@@ -8,8 +8,8 @@ load_dotenv()
 
 class NewsCollector:
     def __init__(self):
-        self.client_id = "5vs7W5qwlVVfQxqf1vUY"  # 네이버 개발자 센터에서 발급받은 클라이언트 ID
-        self.client_secret = "L2CB2x88s4"  # 네이버 개발자 센터에서 발급받은 클라이언트 시크릿
+        self.client_id = os.getenv("NAVER_CLIENT_ID", "5vs7W5qwlVVfQxqf1vUY")  # 환경변수에서 가져오거나 기본값 사용
+        self.client_secret = os.getenv("NAVER_CLIENT_SECRET", "L2CB2x88s4")  # 환경변수에서 가져오거나 기본값 사용
         self.base_url = "https://openapi.naver.com/v1/search/news.json"
         self.headers = {
             "X-Naver-Client-Id": self.client_id,

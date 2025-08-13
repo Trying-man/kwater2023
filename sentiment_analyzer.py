@@ -2,6 +2,7 @@ import logging
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 import numpy as np
+from typing import List
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -84,6 +85,26 @@ class SentimentAnalyzer:
             "labels": self.labels,
             "threshold": self.threshold
         }
+
+    def analyze_batch(self, texts: List[str]) -> List[str]:
+        """
+        여러 텍스트의 감정을 일괄 분석합니다.
+        
+        Args:
+            texts: 분석할 텍스트 리스트
+            
+        Returns:
+            감정 분석 결과 리스트
+        """
+        results = []
+        for text in texts:
+            try:
+                result = self.analyze(text)
+                results.append(result)
+            except Exception as e:
+                logger.error(f"Error analyzing text '{text[:50]}...': {e}")
+                results.append("neutral" if "neutral" in self.labels else "Neutral")
+        return results
 
 # 사용 가능한 한국어 감정분석 모델들
 KOREAN_SENTIMENT_MODELS = {
